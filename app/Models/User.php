@@ -12,9 +12,9 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Attributes\Casts;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['name', 'gender', 'password', 'active', 'role_id'])]
+#[Fillable(['name', 'gender', 'password', 'active', 'role_id', 'photo', 'face_verified'])]
 #[Hidden(['password', 'remember_token'])]
-#[Casts(['active' => 'boolean', 'password' => 'hashed'])]
+#[Casts(['active' => 'boolean', 'face_verified' => 'boolean', 'password' => 'hashed'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */

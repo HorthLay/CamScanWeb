@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
 // tab guest
@@ -29,9 +30,14 @@ Route::middleware(['auth','active'])->group(function () {
     });
 
     Route::middleware('tab.access:users')->group(function () {
-        Route::get('/users', fn() => view('coming-soon', [
-            'page' => 'Users',
-        ]))->name('users');
+       Route::get('/users',                        [UserController::class, 'index'])->name('users');
+        Route::post('/users',                       [UserController::class, 'store'])->name('users.store');
+        Route::put('/users/{user}',                  [UserController::class, 'update'])->name('users.update');
+        Route::delete('/users/{user}',               [UserController::class, 'destroy'])->name('users.destroy');
+
+        // Face verification — two steps
+        Route::post('/users/{user}/verify-face',     [UserController::class, 'verifyFace'])->name('user.verify-face');
+        Route::post('/users/{user}/register-face',   [UserController::class, 'registerFace'])->name('user.register-face');
     });
 
     Route::middleware('tab.access:settings')->group(function () {
