@@ -108,10 +108,16 @@ td{padding:12px 16px;font-size:13.5px;vertical-align:middle}
       Manage accounts, roles, and face verification.
     </p>
   </div>
-  <button class="btn btn-primary" onclick="openCreate()">
-    <span class="material-symbols-outlined" style="font-size:17px">person_add</span>
-    Add user
-  </button>
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <button class="btn btn-ghost" onclick="openSearchCapture()">
+      <span class="material-symbols-outlined" style="font-size:17px">photo_camera</span>
+      Search & Identify Face
+    </button>
+    <button class="btn btn-primary" onclick="openCreate()">
+      <span class="material-symbols-outlined" style="font-size:17px">person_add</span>
+      Add user
+    </button>
+  </div>
 </div>
 
 {{-- Stats row --}}
@@ -252,6 +258,23 @@ td{padding:12px 16px;font-size:13.5px;vertical-align:middle}
         @endforelse
       </tbody>
     </table>
+  </div>
+</div>
+
+{{-- ═══════════════════════════════════════════════════════════════════
+     SEARCH & IDENTIFY FACE MODAL
+═══════════════════════════════════════════════════════════════════ --}}
+<div class="overlay" id="search-overlay" onclick="overlayClose(event,'search-overlay')">
+  <div class="modal" style="max-width:1000px" role="dialog" aria-modal="true" aria-label="Search & Identify Face">
+    <div class="modal-head">
+      <h2>Search & Identify Face</h2>
+      <button class="icon-btn" onclick="closeSearchCapture()" aria-label="Close">
+        <span class="material-symbols-outlined" style="font-size:18px">close</span>
+      </button>
+    </div>
+    <div class="modal-body">
+      @include('tabs.users.search_capture')
+    </div>
   </div>
 </div>
 
@@ -476,6 +499,7 @@ const USERS_DATA = @json($usersJson);
 
 const ROUTES = {
     store:        "{{ route('users.store') }}",
+    captureStore: "{{ route('users.capture-register') }}",
     update:       (id) => `/users/${id}`,
     destroy:      (id) => `/users/${id}`,
     verifyFace:   (id) => `/users/${id}/verify-face`,    // matches route web.php
@@ -499,7 +523,23 @@ function closeModal(id) {
 }
 
 function overlayClose(e, id) {
-    if (e.target.id === id) closeModal(id);
+    if (e.target.id === id) {
+        if (id === 'search-overlay') {
+            closeSearchCapture();
+        } else {
+            closeModal(id);
+        }
+    }
+}
+
+function openSearchCapture() {
+    document.getElementById('search-overlay').classList.add('open');
+    if (typeof startSearchStream === 'function') startSearchStream();
+}
+
+function closeSearchCapture() {
+    closeModal('search-overlay');
+    if (typeof stopSearchStream === 'function') stopSearchStream();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

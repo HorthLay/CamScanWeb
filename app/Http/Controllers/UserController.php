@@ -39,6 +39,64 @@ class UserController extends Controller
         return back()->with('success', "User '{$data['name']}' created.");
     }
 
+    public function captureRegister(Request $request)
+    {
+        $data = $request->validate([
+            'name'       => ['required', 'string', 'max:255', 'unique:users'],
+            'gender'     => ['required', 'in:male,female,other'],
+            'password'   => ['required', 'string', 'min:8'],
+            'role_id'    => ['required', 'exists:roles,id'],
+            'active'     => ['boolean'],
+            'face_image' => ['required', 'image', 'mimes:jpeg,png,webp', 'max:10240'],
+        ]);
+
+        $photoFile = $request->file('face_image');
+        $photoPath = $photoFile->store('users/photos', 'public');
+
+        $user = User::create([
+            'name'          => $data['name'],
+            'gender'        => $data['gender'],
+            'password'      => $data['password'],
+            'role_id'       => $data['role_id'],
+            'active'        => $request->boolean('active'),
+            'photo'         => $photoPath,
+            'face_verified' => false,
+        ]);
+
+        $camScanSynced = false;
+        $camScanMessage = 'User created locally. CamScan service was not configured.';
+
+        if ($baseUrl = config('services.fastapi.url')) {
+            try {
+                $response = Http::timeout(30)
+                    ->asMultipart()
+                    ->attach('face_image', file_get_contents($photoFile->getRealPath()), $photoFile->getClientOriginalName() ?: 'face.jpg')
+                    ->attach('name', $user->name, '')
+                    ->attach('position', $user->role?->name ?? '', '')
+                    ->post("{$baseUrl}/register/user");
+
+                if ($response->successful()) {
+                    $camScanSynced = true;
+                    $camScanMessage = 'User created and face registered in CamScan.';
+                    $user->update(['face_verified' => true]);
+                } else {
+                    $camScanMessage = 'User created locally, but CamScan rejected the photo: '
+                        . ($response->json('detail') ?? $response->body());
+                }
+            } catch (\Exception $e) {
+                $camScanMessage = 'User created locally, but CamScan upload failed: ' . $e->getMessage();
+            }
+        }
+
+        return response()->json([
+            'success'       => true,
+            'user_id'       => $user->id,
+            'name'          => $user->name,
+            'face_verified' => $camScanSynced,
+            'message'       => $camScanMessage,
+        ]);
+    }
+
     public function update(Request $request, User $user)
     {
         $data = $request->validate([

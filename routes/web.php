@@ -30,8 +30,9 @@ Route::middleware(['auth','active'])->group(function () {
     });
 
     Route::middleware('tab.access:users')->group(function () {
-       Route::get('/users',                        [UserController::class, 'index'])->name('users');
+        Route::get('/users',                        [UserController::class, 'index'])->name('users');
         Route::post('/users',                       [UserController::class, 'store'])->name('users.store');
+        Route::post('/users/capture-register',      [UserController::class, 'captureRegister'])->name('users.capture-register');
         Route::put('/users/{user}',                  [UserController::class, 'update'])->name('users.update');
         Route::delete('/users/{user}',               [UserController::class, 'destroy'])->name('users.destroy');
 
