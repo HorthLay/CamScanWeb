@@ -158,9 +158,10 @@ td{padding:12px 16px;font-size:13.5px;vertical-align:middle}
         <tr>
           <th style="width:44px">#</th>
           <th>User</th>
+          <th>Age</th>
           <th>Gender</th>
-          <th>Role</th>
           <th>Status</th>
+          <th>Role</th>
           <th>Face</th>
           <th style="width:90px">Actions</th>
         </tr>
@@ -188,8 +189,31 @@ td{padding:12px 16px;font-size:13.5px;vertical-align:middle}
             </div>
           </td>
 
+          {{-- Age --}}
+          <td style="color:var(--fg-muted);font-family:'JetBrains Mono',monospace;font-size:12px">
+            {{ $user->age ?? ($user->date_of_birth ? $user->calculateAge() : '—') }}
+          </td>
+
           {{-- Gender --}}
           <td style="text-transform:capitalize;color:var(--fg-muted)">{{ $user->gender }}</td>
+
+          {{-- Status (Note) --}}
+          <td>
+            @if($user->note)
+              <span class="badge @php
+                switch($user->note) {
+                  case 'work': echo 'badge-active'; break;
+                  case 'resign': echo 'badge-inactive'; break;
+                  case 'walkout': echo 'badge-unverified'; break;
+                  default: echo 'badge-inactive';
+                }
+              @endphp">
+                {{ ucfirst($user->note) }}
+              </span>
+            @else
+              <span style="font-size:12px;color:var(--fg-faint)">—</span>
+            @endif
+          </td>
 
           {{-- Role --}}
           <td>
@@ -248,7 +272,7 @@ td{padding:12px 16px;font-size:13.5px;vertical-align:middle}
         </tr>
         @empty
         <tr id="empty-row">
-          <td colspan="7">
+          <td colspan="8">
             <div class="empty-state">
               <span class="material-symbols-outlined">group_off</span>
               <p>No users yet. Add one above.</p>
@@ -332,6 +356,29 @@ td{padding:12px 16px;font-size:13.5px;vertical-align:middle}
               <option value="other">Other</option>
             </select>
           </div>
+        </div>
+
+        {{-- Date of Birth + Age --}}
+        <div class="field-row">
+          <div class="field">
+            <label>Date of Birth</label>
+            <input type="date" id="f-dob" name="date_of_birth"/>
+          </div>
+          <div class="field">
+            <label>Age</label>
+            <input type="number" id="f-age" name="age" placeholder="Auto-calculated" min="1" max="120" readonly/>
+          </div>
+        </div>
+
+        {{-- Note (walkout/work/resign) --}}
+        <div class="field">
+          <label>Status Note</label>
+          <select id="f-note" name="note">
+            <option value="">—</option>
+            <option value="work">Working</option>
+            <option value="walkout">Walked Out</option>
+            <option value="resign">Resigned</option>
+          </select>
         </div>
 
         {{-- Password + Role --}}
@@ -481,10 +528,17 @@ td{padding:12px 16px;font-size:13.5px;vertical-align:middle}
 {{-- ─── FIX: compute before @endsection ─── --}}
 @php
     $usersJson = $users->map(function ($u) {
+        $dob = $u->date_of_birth;
+        if ($dob && !($dob instanceof \Carbon\Carbon)) {
+            $dob = $u->date_of_birth ? \Carbon\Carbon::parse($u->date_of_birth) : null;
+        }
         return [
             'id'            => $u->id,
             'name'          => $u->name,
             'gender'        => $u->gender,
+            'age'           => $u->age ?? ($dob ? $dob->diffInYears(now()) : null),
+            'date_of_birth' => $dob ? $dob->toDateString() : null,
+            'note'          => $u->note,
             'role_id'       => $u->role_id,
             'active'        => (bool) $u->active,
             'face_verified' => (bool) $u->face_verified,
@@ -553,6 +607,9 @@ function openCreate() {
     document.getElementById('user-form').action          = ROUTES.store;
     document.getElementById('f-name').value              = '';
     document.getElementById('f-gender').value            = '';
+    document.getElementById('f-dob').value               = '';
+    document.getElementById('f-age').value               = '';
+    document.getElementById('f-note').value              = '';
     document.getElementById('f-password').value          = '';
     document.getElementById('f-role').value              = '';
     document.getElementById('f-active').checked          = false;
@@ -577,6 +634,9 @@ function openEdit(id) {
     document.getElementById('user-form').action          = ROUTES.update(id);
     document.getElementById('f-name').value              = u.name;
     document.getElementById('f-gender').value            = u.gender;
+    document.getElementById('f-dob').value               = u.date_of_birth || '';
+    document.getElementById('f-age').value               = u.age || '';
+    document.getElementById('f-note').value               = u.note || '';
     document.getElementById('f-password').value          = '';
     document.getElementById('f-role').value              = u.role_id ?? '';
     document.getElementById('f-active').checked          = u.active;
@@ -876,6 +936,37 @@ function showToast(msg, type = 'success') {
         setTimeout(() => t.remove(), 320);
     }, 3500);
 }
+
+// Date of Birth to Age calculation
+function calculateAgeFromDob(dobStr) {
+    if (!dobStr) return null;
+    const dob = new Date(dobStr);
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const monthDiff = today.getMonth() - dob.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+        age--;
+    }
+    return age;
+}
+
+function updateAgeFromDobModal() {
+    const dobInput = document.getElementById('f-dob');
+    const ageInput = document.getElementById('f-age');
+    if (dobInput && ageInput) {
+        const age = calculateAgeFromDob(dobInput.value);
+        ageInput.value = age !== null ? age : '';
+    }
+}
+
+// Initialize date of birth listeners
+document.addEventListener('DOMContentLoaded', function() {
+    const dobInput = document.getElementById('f-dob');
+    if (dobInput) {
+        dobInput.addEventListener('change', updateAgeFromDobModal);
+        dobInput.addEventListener('input', updateAgeFromDobModal);
+    }
+});
 
 // Show Laravel session toast on page load
 @if(session('success'))

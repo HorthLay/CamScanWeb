@@ -101,11 +101,19 @@
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        {{-- Age --}}
+        {{-- Date of Birth --}}
         <div class="ai-field">
-          <label>Estimated age</label>
-          <input type="number" id="cap-age" placeholder="—" min="1" max="120"/>
+          <label>Date of Birth</label>
+          <input type="date" id="cap-dob" placeholder="—"/>
         </div>
+        {{-- Age (auto-calculated from DOB) --}}
+        <div class="ai-field">
+          <label>Age</label>
+          <input type="number" id="cap-age" placeholder="Auto-calculated" min="1" max="120" readonly/>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         {{-- Gender --}}
         <div class="ai-field">
           <label>Gender</label>
@@ -114,6 +122,16 @@
             <option value="male">Male</option>
             <option value="female">Female</option>
             <option value="other">Other</option>
+          </select>
+        </div>
+        {{-- Note (walkout/work/resign) --}}
+        <div class="ai-field">
+          <label>Status Note</label>
+          <select id="cap-note">
+            <option value="">—</option>
+            <option value="work">Working</option>
+            <option value="walkout">Walked Out</option>
+            <option value="resign">Resigned</option>
           </select>
         </div>
       </div>
@@ -145,10 +163,14 @@
         </label>
       </div>
 
-      {{-- AI notes (read-only) --}}
-      <div class="ai-field">
-        <label>AI notes</label>
-        <input type="text" id="cap-notes" readonly style="opacity:.7;cursor:default"/>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        {{-- AI notes (read-only) --}}
+        <div class="ai-field">
+          <label>AI notes</label>
+          <input type="text" id="cap-notes" readonly style="opacity:.7;cursor:default"/>
+        </div>
+        {{-- Empty cell for grid alignment --}}
+        <div></div>
       </div>
     </div>
 
@@ -180,6 +202,15 @@ const FASTAPI_SEARCH_URL   = "{{ rtrim(config('services.fastapi.url') ?? 'http:/
 const LARAVEL_CAPTURE_REGISTER_URL = window.ROUTES?.captureStore ?? "{{ route('users.capture-register') }}";
 const CSRF_TOKEN           = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
+// ── Initialize date of birth listener ─────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+    const dobInput = document.getElementById('cap-dob');
+    if (dobInput) {
+        dobInput.addEventListener('change', updateAgeFromDob);
+        dobInput.addEventListener('input', updateAgeFromDob);
+    }
+});
+
 // ── State ────────────────────────────────────────────────────────────────────
 let capturedB64   = null;   // base64 image from FastAPI
 let capturedBlob  = null;   // converted to Blob for form submit
@@ -198,6 +229,34 @@ const elOvalGuide   = () => document.getElementById('oval-guide');
 const elCountdown   = () => document.getElementById('countdown-overlay');
 const elCountNum    = () => document.getElementById('countdown-num');
 
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function calculateAgeFromDob(dobStr) {
+    if (!dobStr) return null;
+    const dob = new Date(dobStr);
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const monthDiff = today.getMonth() - dob.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+        age--;
+    }
+    return age;
+}
+
+function updateAgeFromDob() {
+    const dobInput = document.getElementById('cap-dob');
+    const ageInput = document.getElementById('cap-age');
+    const dobValue = dobInput.value;
+    
+    if (dobValue) {
+        const age = calculateAgeFromDob(dobValue);
+        if (age !== null) {
+            ageInput.value = age;
+        }
+    } else {
+        ageInput.value = '';
+    }
+}
 
 // ── STEP 1: Hit FastAPI /register/capture ─────────────────────────────────────
 // FastAPI handles the webcam + TTS countdown + InsightFace + Mistral internally.
@@ -247,9 +306,22 @@ async function startCapture() {
         elCountdown().style.display   = 'none';
 
         // ── Fill AI fields ────────────────────────────────────────────────────
-        document.getElementById('cap-age').value      = data.estimated_age ?? '';
+        // Fill date_of_birth if available, otherwise fill age
+        if (data.date_of_birth) {
+            document.getElementById('cap-dob').value = data.date_of_birth;
+            updateAgeFromDob();
+        } else if (data.age) {
+            document.getElementById('cap-age').value = data.age;
+        }
         document.getElementById('cap-gender').value   = normalizeGender(data.gender);
         document.getElementById('cap-notes').value    = data.ai_notes ?? '';
+        
+        // Fill note field if available from matched user or from data
+        if (data.matched && data.user && data.user.note) {
+            document.getElementById('cap-note').value = data.user.note;
+        } else if (data.note) {
+            document.getElementById('cap-note').value = data.note;
+        }
 
         elAiResults().style.display = 'block';
         elBtnRetake().style.display = 'flex';
@@ -307,8 +379,10 @@ function retakeCapture() {
     elCountdown().style.display   = 'none';
 
     document.getElementById('cap-name').value     = '';
+    document.getElementById('cap-dob').value      = '';
     document.getElementById('cap-age').value      = '';
     document.getElementById('cap-gender').value   = '';
+    document.getElementById('cap-note').value     = '';
     document.getElementById('cap-password').value = '';
     document.getElementById('cap-role').value     = '';
     document.getElementById('cap-active').checked = false;
@@ -358,6 +432,23 @@ async function saveUser() {
     form.append('gender',     gender);
     form.append('password',   password);
     form.append('role_id',    roleId);
+    
+    // Add date_of_birth and age
+    const dobValue = document.getElementById('cap-dob').value;
+    const ageValue = document.getElementById('cap-age').value;
+    if (dobValue) {
+        form.append('date_of_birth', dobValue);
+    }
+    if (ageValue) {
+        form.append('age', ageValue);
+    }
+    
+    // Add note
+    const noteValue = document.getElementById('cap-note').value;
+    if (noteValue) {
+        form.append('note', noteValue);
+    }
+    
     if (document.getElementById('cap-active').checked) {
         form.append('active', '1');
     }

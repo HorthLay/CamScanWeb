@@ -12,9 +12,9 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Attributes\Casts;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['name', 'gender', 'password', 'active', 'role_id', 'photo', 'face_verified'])]
+#[Fillable(['name', 'gender', 'password', 'active', 'role_id', 'photo', 'face_verified', 'date_of_birth', 'age', 'note'])]
 #[Hidden(['password', 'remember_token'])]
-#[Casts(['active' => 'boolean', 'face_verified' => 'boolean', 'password' => 'hashed'])]
+#[Casts(['active' => 'boolean', 'face_verified' => 'boolean', 'password' => 'hashed', 'date_of_birth' => 'date'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
@@ -23,6 +23,35 @@ class User extends Authenticatable
     public function role(): BelongsTo
     {
         return $this->belongsTo(Role::class);
+    }
+
+    public function calculateAge(): ?int
+    {
+        if (!$this->date_of_birth) {
+            return null;
+        }
+        
+        // Ensure date_of_birth is a Carbon instance
+        $dob = $this->date_of_birth instanceof \Carbon\Carbon 
+            ? $this->date_of_birth 
+            : \Carbon\Carbon::parse($this->date_of_birth);
+        
+        $today = now();
+        $age = $today->year - $dob->year;
+        
+        // Subtract one if birthday hasn't occurred yet this year
+        if ($today->month < $dob->month || 
+            ($today->month == $dob->month && $today->day < $dob->day)) {
+            $age--;
+        }
+        
+        return $age;
+    }
+
+    public function updateAgeFromDob(): void
+    {
+        $this->age = $this->calculateAge();
+        $this->save();
     }
 
     public function canAccess(string $tabSlug): bool

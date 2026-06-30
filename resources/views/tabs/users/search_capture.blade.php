@@ -380,6 +380,10 @@
                 <span class="meta-val" id="searchUserID">-</span>
             </div>
             <div class="meta-row">
+                <span class="meta-key">Status</span>
+                <span class="meta-val" id="searchUserStatus">-</span>
+            </div>
+            <div class="meta-row">
                 <span class="meta-key">AI Notes</span>
                 <span class="meta-val" id="searchUserNotes">-</span>
             </div>
@@ -479,6 +483,7 @@ function resetSearchUI() {
     document.getElementById("searchUserPosition").textContent = "-";
     document.getElementById("searchUserAgeGender").textContent = "-";
     document.getElementById("searchUserID").textContent = "-";
+    document.getElementById("searchUserStatus").textContent = "-";
     document.getElementById("searchUserNotes").textContent = "-";
 }
 
@@ -565,6 +570,18 @@ async function runFaceSearch() {
             userAgeGen.textContent = `${age} / ${gen}`;
             
             userId.textContent = `#${data.user.id}`;
+            
+            // Display status with badge styling
+            const note = data.user.note;
+            const statusEl = document.getElementById("searchUserStatus");
+            if (note) {
+                const noteText = note.charAt(0).toUpperCase() + note.slice(1); // Capitalize first letter
+                const badgeClass = note === 'work' ? 'badge-active' : note === 'resign' ? 'badge-inactive' : 'badge-unverified';
+                statusEl.innerHTML = `<span class="badge ${badgeClass}">${noteText}</span>`;
+            } else {
+                statusEl.textContent = "-";
+            }
+            
             userNotes.textContent = data.user.ai_notes || "No system notes available.";
 
             // Trigger Laravel view notification if needed
@@ -591,6 +608,7 @@ async function runFaceSearch() {
             userPos.textContent = "UNAUTHORIZED PERSONNEL";
             userAgeGen.textContent = "-";
             userId.textContent = "N/A";
+            document.getElementById("searchUserStatus").textContent = "-";
             userNotes.textContent = "No matching face records found in database directory.";
 
             if (typeof showToast === 'function') {
@@ -607,6 +625,7 @@ async function runFaceSearch() {
         badge.textContent = "ERROR";
 
         userName.textContent = "SCAN ERROR";
+        document.getElementById("searchUserStatus").textContent = "-";
         userNotes.textContent = e.message || "FastAPI connection timeout or webcam hardware issue.";
     } finally {
         btn.disabled = false;

@@ -39,6 +39,9 @@ Route::middleware(['auth','active'])->group(function () {
         // Face verification — two steps
         Route::post('/users/{user}/verify-face',     [UserController::class, 'verifyFace'])->name('user.verify-face');
         Route::post('/users/{user}/register-face',   [UserController::class, 'registerFace'])->name('user.register-face');
+        
+        // API endpoint for FastAPI sync
+        Route::post('/api/users/sync-from-fastapi', [UserController::class, 'apiUpdateFromFastApi'])->name('api.users.sync');
     });
 
     Route::middleware('tab.access:settings')->group(function () {
