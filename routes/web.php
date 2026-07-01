@@ -3,6 +3,7 @@
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\CameraController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DetectionController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
@@ -66,6 +67,17 @@ Route::middleware(['auth','active'])->group(function () {
     // Camera control routes
     Route::middleware('tab.access:detection')->group(function () {
         // REST API routes (for backward compatibility)
+
+        Route::get('/detection',[DetectionController::class, 'index'])->name('detection');
+        
+        // Detection API routes
+        Route::post('/detection/detect', [DetectionController::class, 'detect'])->name('detection.detect');
+        Route::post('/detection/stream/start', [DetectionController::class, 'startStreamDetection'])->name('detection.stream.start');
+        Route::post('/detection/stream/stop', [DetectionController::class, 'stopStreamDetection'])->name('detection.stream.stop');
+        Route::get('/detection/status', [DetectionController::class, 'detectionStatus'])->name('detection.status');
+        Route::post('/detection/validate-stream', [DetectionController::class, 'validateStream'])->name('detection.validate.stream');
+        Route::get('/detection/results', [DetectionController::class, 'getResults'])->name('detection.results');
+
         Route::get('/camera/control', [CameraController::class, 'controlPanel'])->name('camera.control');
         Route::get('/camera/control/websocket', fn() => view('tabs.camera.control_websocket'))->name('camera.control.websocket');
         Route::post('/camera/start', [CameraController::class, 'start'])->name('camera.start');
