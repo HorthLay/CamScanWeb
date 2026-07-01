@@ -306,21 +306,31 @@
     <div class="search-card" id="searchCameraCard">
         <div class="search-title">
             <span>Live Surveillance Terminal</span>
-            <span style="font-size: 11px; color: #10b981; font-weight: 600">● ONLINE</span>
+            <span id="searchCamLabel" style="font-size: 11px; color: var(--fg-muted); font-weight: 600">● OFFLINE</span>
         </div>
 
-        <div class="cam-container">
-            <img class="cam-feed" id="search-cam-feed" src="" alt="Camera feed standby">
+        <div class="cam-container" style="display: flex; align-items: center; justify-content: center; position: relative;">
+            <img class="cam-feed" id="search-cam-feed" src="" alt="Camera feed standby" style="display: none;">
+            <div id="searchCamPlaceholder" class="placeholder-txt" style="color: var(--fg-muted); font-size: 13px; font-weight: 500; text-align: center; line-height: 1.6;">
+                Camera Offline<br>
+                <span style="font-size: 11px; opacity: 0.7;">Click button below to search</span>
+            </div>
             <div class="scan-overlay" id="searchScannerOverlay">
                 <div class="scan-line"></div>
                 <div class="scan-pulse-box"></div>
             </div>
         </div>
 
-        <button class="btn-search-trigger" id="searchTriggerButton" onclick="runFaceSearch()">
-            <span class="material-symbols-outlined" style="font-size: 18px">search</span>
-            SEARCH & IDENTIFY FACE
-        </button>
+        <div style="display: flex; gap: 10px; width: 100%; margin-top: 18px;">
+            <button class="btn-search-trigger" id="searchTriggerButton" onclick="runFaceSearch()" style="margin-top: 0; flex: 2;">
+                <span class="material-symbols-outlined" style="font-size: 18px">search</span>
+                SEARCH & IDENTIFY FACE
+            </button>
+            <button type="button" id="searchToggleCamBtn" onclick="toggleSearchCamera()" style="display: flex; align-items: center; justify-content: center; gap: 6px; padding: 14px 20px; border-radius: 10px; border: 1px solid var(--border); background: var(--input-bg); color: var(--fg); font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; flex: 1;">
+                <span class="material-symbols-outlined" id="searchToggleCamIcon" style="font-size: 18px">videocam_off</span>
+                <span id="searchToggleCamText">Stop Camera</span>
+            </button>
+        </div>
     </div>
 
     <!-- Right Card: Verification Results -->
@@ -441,19 +451,167 @@ function playSearchCountdown() {
     });
 }
 
-// ── Stream Lifecycle Controller ──────────────────────────────────────────────
-function startSearchStream() {
+// ── Toast Notification Helper ──────────────────────────────────────────────
+function showSearchToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `toast align-items-center text-white bg-${type} border-0`;
+    toast.setAttribute('role', 'alert');
+    toast.setAttribute('aria-live', 'assertive');
+    toast.setAttribute('aria-atomic', 'true');
+    toast.style.position = 'fixed';
+    toast.style.bottom = '20px';
+    toast.style.right = '20px';
+    toast.style.zIndex = '11';
+    
+    const toastBody = document.createElement('div');
+    toastBody.className = 'd-flex';
+    
+    const toastMessage = document.createElement('div');
+    toastMessage.className = 'toast-body';
+    toastMessage.textContent = message;
+    
+    const toastClose = document.createElement('button');
+    toastClose.type = 'button';
+    toastClose.className = 'btn-close btn-close-white me-2 m-auto';
+    toastClose.setAttribute('data-bs-dismiss', 'toast');
+    toastClose.setAttribute('aria-label', 'Close');
+    
+    toastBody.appendChild(toastMessage);
+    toastBody.appendChild(toastClose);
+    toast.appendChild(toastBody);
+    
+    document.body.appendChild(toast);
+    
+    const bsToast = new bootstrap.Toast(toast, { autohide: true, delay: 5000 });
+    bsToast.show();
+    
+    toast.addEventListener('hidden.bs.toast', function() {
+        toast.remove();
+    });
+}
+
+// ── IP-based Camera Control Configuration ────────────────────────────────
+const CAMERA_STATUS_URL = "{{ route('camera.status') }}";
+const CAMERA_START_URL = "{{ route('camera.start') }}";
+const CAMERA_STOP_URL = "{{ route('camera.stop') }}";
+
+// ── Stream Lifecycle Controller with IP-based Camera Control ──────────────
+async function startSearchStream() {
+    // Check if camera is allowed for this IP
+    try {
+        const statusResponse = await fetch(CAMERA_STATUS_URL, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            }
+        });
+        
+        const statusData = await statusResponse.json();
+        
+        if (statusData.is_allowed) {
+            // Start camera for this IP
+            const startResponse = await fetch(CAMERA_START_URL, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    'Accept': 'application/json'
+                }
+            });
+            
+            const startData = await startResponse.json();
+            
+            if (!startData.success) {
+                console.error('Failed to start camera:', startData.message);
+                showSearchToast(startData.message || 'Camera access denied', 'error');
+                return;
+            }
+        } else if (statusData.is_active) {
+            // Already active for this IP, just show stream
+        } else {
+            // Not allowed to use camera
+            showSearchToast(statusData.message || 'Camera is being used by another IP', 'error');
+            return;
+        }
+    } catch (error) {
+        console.error('Error checking camera status:', error);
+        showSearchToast('Error checking camera access', 'error');
+        return;
+    }
+    
+    // Proceed with showing the stream
     const feed = document.getElementById('search-cam-feed');
+    const placeholder = document.getElementById('searchCamPlaceholder');
+    const label = document.getElementById('searchCamLabel');
+    const toggleBtnText = document.getElementById('searchToggleCamText');
+    const toggleBtnIcon = document.getElementById('searchToggleCamIcon');
+
     if (feed) {
         feed.src = `${SEARCH_API_BASE}/video_feed?ts=${Date.now()}`;
+        feed.style.display = 'block';
     }
+    if (placeholder) {
+        placeholder.style.display = 'none';
+    }
+    if (label) {
+        label.textContent = '● ONLINE';
+        label.style.color = '#10b981';
+    }
+    if (toggleBtnText) toggleBtnText.textContent = "Stop Camera";
+    if (toggleBtnIcon) toggleBtnIcon.textContent = "videocam_off";
     resetSearchUI();
 }
 
-function stopSearchStream() {
+async function stopSearchStream() {
+    // Stop camera for this IP
+    try {
+        const response = await fetch(CAMERA_STOP_URL, {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                'Accept': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            console.error('Failed to stop camera:', data.message);
+        }
+    } catch (error) {
+        console.error('Error stopping camera:', error);
+    }
+    
+    // Update UI
     const feed = document.getElementById('search-cam-feed');
+    const placeholder = document.getElementById('searchCamPlaceholder');
+    const label = document.getElementById('searchCamLabel');
+    const toggleBtnText = document.getElementById('searchToggleCamText');
+    const toggleBtnIcon = document.getElementById('searchToggleCamIcon');
+
     if (feed) {
         feed.src = "";
+        feed.style.display = 'none';
+    }
+    if (placeholder) {
+        placeholder.style.display = 'block';
+    }
+    if (label) {
+        label.textContent = '● OFFLINE';
+        label.style.color = 'var(--fg-muted)';
+    }
+    if (toggleBtnText) toggleBtnText.textContent = "Start Camera";
+    if (toggleBtnIcon) toggleBtnIcon.textContent = "videocam";
+}
+
+function toggleSearchCamera() {
+    const feed = document.getElementById('search-cam-feed');
+    const isStreaming = feed && feed.src && feed.src !== "";
+    if (isStreaming) {
+        stopSearchStream();
+    } else {
+        startSearchStream();
     }
 }
 
@@ -489,6 +647,9 @@ function resetSearchUI() {
 
 // ── Search Action ────────────────────────────────────────────────────────────
 async function runFaceSearch() {
+    // Start/open the camera stream for searching
+    await startSearchStream();
+
     const btn = document.getElementById("searchTriggerButton");
     const overlay = document.getElementById("searchScannerOverlay");
     const cameraCard = document.getElementById("searchCameraCard");
@@ -630,6 +791,8 @@ async function runFaceSearch() {
     } finally {
         btn.disabled = false;
         overlay.style.display = "none";
+        // Stop/close the camera stream immediately when finished
+        stopSearchStream();
     }
 }
 </script>

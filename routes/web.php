@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\CameraController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
@@ -60,6 +61,18 @@ Route::middleware(['auth','active'])->group(function () {
         Route::get('/videos', fn() => view('coming-soon', [
             'page' => 'Video management',
         ]))->name('videos.index');
+    });
+
+    // Camera control routes
+    Route::middleware('tab.access:detection')->group(function () {
+        // REST API routes (for backward compatibility)
+        Route::get('/camera/control', [CameraController::class, 'controlPanel'])->name('camera.control');
+        Route::get('/camera/control/websocket', fn() => view('tabs.camera.control_websocket'))->name('camera.control.websocket');
+        Route::post('/camera/start', [CameraController::class, 'start'])->name('camera.start');
+        Route::post('/camera/stop', [CameraController::class, 'stop'])->name('camera.stop');
+        Route::get('/camera/status', [CameraController::class, 'status'])->name('camera.status');
+        Route::post('/camera/clear-stop', [CameraController::class, 'clearStop'])->name('camera.clear-stop');
+        Route::get('/camera/active-ips', [CameraController::class, 'activeIps'])->name('camera.active-ips');
     });
    
 });
